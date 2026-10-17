@@ -1,0 +1,24 @@
+{
+  "model_version": "v0.1",
+  "model": "StandardScaler + LinearRegression",
+  "rmse": 53.85344583676592,
+  "mae": 42.79409467959994,
+  "r2": 0.4526027629719197,
+  "dataset": "sklearn.datasets.load_diabetes",
+  "test_size": 0.2,
+  "random_state": 42,
+  "n_train": 353,
+  "n_test": 89,
+  "features": [
+    "age",
+    "sex",
+    "bmi",
+    "bp",
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s6"
+  ]
+}
