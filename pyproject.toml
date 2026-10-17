@@ -1,0 +1,14 @@
+# Configuration of the development tools (lint and tests)
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# E/F: classic errors, I: import order, B: common bugs, UP: modern syntax
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+# Lets the tests do "from app.main import ..." from the project root
+pythonpath = ["."]
+testpaths = ["tests"]

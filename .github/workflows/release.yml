@@ -1,0 +1,116 @@
+# Release: runs only when a version tag is pushed (v0.1, v0.2, ...).
+# Builds the Docker image, tests the running container,
+# publishes it to GHCR and creates a GitHub Release.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push the image to GHCR
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code of the tagged version
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Image name (GHCR needs lowercase) and version (= tag name)
+      - name: Set image name and version
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+
+      # 3. Build the image (the model is trained inside, see Dockerfile)
+      - name: Build Docker image
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            -t "$IMAGE:$VERSION" .
+
+      # 4. Start the container exactly like the grader will
+      - name: Start container
+        run: |
+          docker run -d --name api -p 80:80 "$IMAGE:$VERSION"
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:80/health && break
+            sleep 2
+          done
+
+      # 5. Smoke tests on the running container
+      - name: Smoke test /health
+        run: |
+          curl -fs http://localhost:80/health | tee health.json
+          python3 -c "import json; d=json.load(open('health.json')); \
+            assert d['status'] == 'ok', d; \
+            assert d['model_version'] == '$VERSION', d"
+
+      - name: Smoke test /predict
+        run: |
+          curl -fs -X POST http://localhost:80/predict \
+            -H "Content-Type: application/json" \
+            -d '{"age": 0.02, "sex": -0.044, "bmi": 0.06, "bp": -0.03, "s1": -0.02, "s2": 0.03, "s3": -0.02, "s4": 0.02, "s5": 0.02, "s6": -0.001}' \
+            | tee predict.json
+          python3 -c "import json; d=json.load(open('predict.json')); \
+            assert isinstance(d['prediction'], float), d"
+
+      - name: Smoke test invalid input (missing s6 -> 422)
+        run: |
+          code=$(curl -s -o error.json -w "%{http_code}" -X POST http://localhost:80/predict \
+            -H "Content-Type: application/json" \
+            -d '{"age": 0.02, "sex": -0.044, "bmi": 0.06, "bp": -0.03, "s1": -0.02, "s2": 0.03, "s3": -0.02, "s4": 0.02, "s5": 0.02}')
+          cat error.json
+          test "$code" = "422"
+
+      # If a test failed, show the container logs to help debugging
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker logs api
+
+      # 6. Copy the metrics computed during the build out of the image
+      - name: Extract metrics from the image
+        run: docker cp api:/app/models/. ./release-files/
+
+      # 7. Publish the image on GHCR
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to GHCR
+        run: docker push "$IMAGE:$VERSION"
+
+      # 8. Release notes = this version's CHANGELOG section + metrics
+      - name: Prepare release notes
+        run: |
+          {
+            echo "## Docker image"
+            echo '```'
+            echo "docker pull $IMAGE:$VERSION"
+            echo "docker run -it -p 80:80 $IMAGE:$VERSION"
+            echo '```'
+            echo
+            echo "## Changes"
+            awk -v tag="$VERSION" '/^## /{p = index($0, tag) > 0; next} p' CHANGELOG.md
+            echo
+            echo "## Metrics"
+            echo '```json'
+            cat release-files/metrics_*.json
+            echo '```'
+          } > release_notes.md
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: release-files/metrics_*.json
