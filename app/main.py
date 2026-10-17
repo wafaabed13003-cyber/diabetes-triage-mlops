@@ -6,7 +6,7 @@ Endpoints:
 
 The model file and version are chosen with environment variables,
 so the same code serves v0.1 and v0.2:
-    MODEL_PATH     (default: models/model_v01.joblib)
+    MODEL_PATH     (default: artifacts/model_v01.joblib)
     MODEL_VERSION  (default: v0.1)
 """
 
@@ -19,7 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-MODEL_PATH = os.getenv("MODEL_PATH", "models/model_v01.joblib")
+MODEL_PATH = os.getenv("MODEL_PATH", "artifacts/model_v01.joblib")
 MODEL_VERSION = os.getenv("MODEL_VERSION", "v0.1")
 
 # Same order as the columns used during training
