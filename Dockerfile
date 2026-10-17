@@ -12,17 +12,27 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 2) API code and training script
+# 2) API code and training scripts
 COPY app/ app/
-COPY train.py .
+COPY train.py train_v02.py ./
 
-# 3) Train at build time: the model is baked into the image
-#    (self-contained image, nothing to provide at startup)
-RUN python train.py
+# 3) Model version to build, chosen at build time (default: v0.1)
+#    docker build --build-arg MODEL_VERSION=v0.2 -t diabetes-triage:v0.2 .
+ARG MODEL_VERSION=v0.1
+
+# 4) Train the chosen model at build time: the model is baked into the image
+#    (self-contained image, nothing to provide at startup).
+#    The trained model is copied to a fixed name so MODEL_PATH is the same
+#    for every version.
+RUN case "$MODEL_VERSION" in \
+        v0.1) python train.py && cp models/model_v01.joblib models/model.joblib ;; \
+        v0.2) python train_v02.py && cp models/model_v02.joblib models/model.joblib ;; \
+        *) echo "Unknown MODEL_VERSION: $MODEL_VERSION" && exit 1 ;; \
+    esac
 
 # Version returned by /health and model location (read by app/main.py)
-ENV MODEL_VERSION=v0.1 \
-    MODEL_PATH=models/model_v01.joblib
+ENV MODEL_VERSION=${MODEL_VERSION} \
+    MODEL_PATH=models/model.joblib
 
 EXPOSE 80
 

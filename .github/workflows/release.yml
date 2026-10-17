@@ -27,10 +27,12 @@ jobs:
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
-      # 3. Build the image (the model is trained inside, see Dockerfile)
+      # 3. Build the image for this version (the model is trained inside,
+      #    see Dockerfile). The tag name (v0.1, v0.2) selects the model.
       - name: Build Docker image
         run: |
           docker build \
+            --build-arg "MODEL_VERSION=$VERSION" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             -t "$IMAGE:$VERSION" .
 
