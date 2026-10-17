@@ -1,0 +1,50 @@
+# CI: runs on every push and every pull request.
+# Fails if the code is not clean (lint) or if a test fails.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-test-train:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code of the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Install Python (same version as in the Dockerfile)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # 3. Install the libraries + test tools (versions pinned)
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # 4. Lint: fails if the code is not clean
+      - name: Lint with ruff
+        run: ruff check .
+
+      # 5. Quick training smoke test: the script must produce the model
+      - name: Train model (smoke test)
+        run: |
+          python train.py
+          test -f models/model_v01.joblib
+          test -f models/metrics_v01.json
+          cat models/metrics_v01.json
+
+      # 6. Unit tests of the API (they load the model trained above)
+      - name: Run unit tests
+        run: pytest -v
+
+      # 7. Save the model and its metrics as downloadable artifacts
+      - name: Upload model and metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-and-metrics
+          path: models/
