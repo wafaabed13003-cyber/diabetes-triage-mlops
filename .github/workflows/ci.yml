@@ -30,16 +30,25 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
-      # 5. Quick training smoke test: the script must produce the model
-      - name: Train model (smoke test)
+      # 5. Quick training smoke test: both scripts must produce their model
+      - name: Train models (smoke test)
         run: |
           python train.py
+          python train_v02.py
           test -f models/model_v01.joblib
           test -f models/metrics_v01.json
-          cat models/metrics_v01.json
+          test -f models/model_v02.joblib
+          test -f models/metrics_v02.json
+          cat models/metrics_v01.json models/metrics_v02.json
 
-      # 6. Unit tests of the API (they load the model trained above)
-      - name: Run unit tests
+      # 6. Unit tests of the API, once with each model trained above
+      - name: Run unit tests (v0.1)
+        run: pytest -v
+
+      - name: Run unit tests (v0.2)
+        env:
+          MODEL_PATH: models/model_v02.joblib
+          MODEL_VERSION: v0.2
         run: pytest -v
 
       # 7. Save the model and its metrics as downloadable artifacts
